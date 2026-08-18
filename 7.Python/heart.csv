@@ -1,0 +1,21 @@
+Age,Gender,ChestPain,BloodPressure,Cholesterol,MaxHeartRate,ExerciseAngina,Disease
+63,Male,Typical Angina,145,233,150,No,1
+37,Male,Non-Anginal Pain,130,250,187,No,0
+41,Female,Atypical Angina,130,204,172,No,0
+56,Male,Atypical Angina,120,236,178,No,0
+57,Female,Typical Angina,120,354,163,Yes,1
+57,Male,Non-Anginal Pain,140,192,148,No,0
+56,Female,Atypical Angina,140,294,153,No,0
+44,Male,Atypical Angina,120,263,173,No,0
+52,Male,Non-Anginal Pain,172,199,162,No,1
+57,Male,Non-Anginal Pain,150,168,174,No,0
+54,Male,Typical Angina,140,239,160,Yes,1
+48,Female,Atypical Angina,130,275,139,No,0
+49,Male,Non-Anginal Pain,130,266,171,No,0
+64,Male,Typical Angina,110,211,144,Yes,1
+58,Female,Typical Angina,150,283,162,Yes,1
+50,Female,Atypical Angina,120,219,158,No,0
+66,Male,Typical Angina,160,228,138,Yes,1
+43,Female,Non-Anginal Pain,115,303,181,No,0
+69,Male,Typical Angina,140,239,151,Yes,1
+59,Male,Atypical Angina,135,234,161,No,0
