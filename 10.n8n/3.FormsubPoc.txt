@@ -1,0 +1,39 @@
+#AI-Powered Form Processing Workflow using n8n + Gemini + MCP
+                  Form Submission
+                         │
+                         ▼
+                   On Form Submission Trigger
+                         │
+                         ▼
+                        AI Agent
+                         │
+                   ┌─────┴─────┐
+                   │           │
+                   ▼           ▼
+                  Gemini     MCP Client
+                  LLM         Tools
+                         │
+                         ▼
+                   Decision Logic
+                         │
+                         ▼
+                        IF
+                     ┌──┴───┐
+                     │      │
+                ()  True    False
+                   │        │
+                   ▼        ▼
+                  Gmail   Edit Fields
+                  Send     Update
+                  Message  Data
+
+True-positive, False-negitive
+This is an AI-powered workflow built using n8n where a form submission triggers a 
+Gemini-powered AI Agent. The agent analyzes the user's request and can interact with 
+enterprise systems through an MCP Client, such as Jira for ticket management, GitHub
+for repository or pull request information, and Confluence for documentation lookup.
+Based on the AI's decision and business rules, the workflow either performs actions
+like creating tickets, retrieving information, updating records, or sends notifications
+through email. If negative comes it will goes to edit field, if positive it will go to Gmail
+This demonstrates how Agentic AI, MCP,  and workflow automation can be 
+combined to build intelligent enterprise solutions."

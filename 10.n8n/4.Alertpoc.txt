@@ -1,0 +1,41 @@
+        CloudWatch Alert / Prometheus Alert
+                        │
+                        ▼
+                    Webhook
+                        │
+                        ▼
+                 HTTP Request
+              (Fetch Incident Data)
+                        │
+                        ▼
+                    AI Agent
+              (Gemini / OpenAI)
+                        │
+                        ▼
+                 Generate RCA
+                        │
+                        ▼
+                       If
+                  RCA Generated?
+                  ┌────┴────┐
+                  │         │
+                 Yes        No
+                  │         │
+                  ▼         ▼
+          Create Jira Ticket  Send Failure Alert
+                  │
+                  ▼
+              Slack / Teams
+              Notification
+                  │
+                  ▼
+              Store Report
+           (Google Sheet/DB)
+
+"I built an AI-powered incident management workflow in n8n. Monitoring alerts from 
+CloudWatch or Prometheus trigger the workflow through a webhook. The workflow collects
+incident details and sends them to a Gemini-powered AI Agent, which analyzes logs and 
+metrics to generate an RCA summary. If the analysis is successful, a Jira ticket is 
+automatically created, stakeholders are notified through Slack or Teams, and the final 
+incident report is stored for future reference.  This helps reduce manual analysis effort
+ and improves incident response time.

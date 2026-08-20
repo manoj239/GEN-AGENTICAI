@@ -1,0 +1,54 @@
+GitHub Webhook / CloudWatch Alert / Prometheus Alert
+                         ↓
+                     Webhook
+                         ↓
+                HTTP Request Node
+          (Collect Logs & Metrics)
+                         ↓
+                     AI Agent
+                         ↓
+            Google Gemini Chat Model
+                         ↓
+                 RCA Generation
+                         ↓
+                    IF Node
+        (Is Action Required?)
+                ↓          ↓
+              Yes          No
+               ↓            ↓
+       Create Jira Ticket   Store Report
+               ↓
+         Slack Notification
+               ↓
+        Incident Report DB
+
+Example Scenario: CI/CD Pipeline Failure
+        GitHub Actions Failed
+                ↓
+        GitHub Webhook triggers n8n
+                ↓
+        Workflow retrieves build logs
+                ↓
+        Gemini analyzes failure reason
+                ↓
+        AI generates incident summary and RCA
+                ↓
+        n8n creates Jira ticket automatically
+                ↓
+        Slack notification sent to DevOps Team
+                ↓
+        Incident report stored for auditing and reporting
+
+Summary: I built an AI-powered DevOps automation workflow in n8n where monitoring alerts
+or GitHub. Actions failures trigger a workflow through webhooks. The workflow collects
+logs and operational data, sends them to a Gemini-powered AI Agent for analysis, generates
+an  RCA summary, automatically creates Jira tickets, notifies teams through Slack, and stores
+the incident report for future analysis. This reduced manual troubleshooting effort and 
+improved incident response times by automating repetitive operational tasks.
+
+Benefits: Reduced Manual Investigation, Faster RCA, Automated Reporting, Improved 
+Incident Response
+
+Why use n8n instead of Python scripts? n8n provides visual workflow orchestration,
+built-in integrations, scheduling,  error handling, and monitoring, reducing development
+time and maintenance effort.
