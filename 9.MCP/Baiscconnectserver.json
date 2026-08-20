@@ -1,0 +1,35 @@
+### Local MCP Server Run Methods in 3 Ways
+
+###Method 1: Install (Traditional)**
+
+###Install server once using npm.
+#Example: 
+npm install -g @modelcontextprotocol/server-github
+
+#Method 2: npx (No installation): Uses Node.js to download and run the server temporarily.
+#Example in config:
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      }
+    }
+  }
+}
+#Method 3: Docker (Containerized)** Runs MCP server inside a container using Docker.
+#Example: docker run mcp/github-server
+
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "mcp/github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      }
+    }
+  }
+}

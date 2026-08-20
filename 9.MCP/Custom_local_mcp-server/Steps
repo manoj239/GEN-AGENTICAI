@@ -1,0 +1,63 @@
+uv init mcp_local_server
+cd mcp_local_server
+create virtual envi
+uv add fastmcp
+uv run fastmcp dev main.py
+uv run fastmcp run main.py
+
+So, from Claude desktop, if I ask expenses of traveling from Mumbai to hyd, what is expenses then it should automatically call expense app through mcp and insert that record in the db.
+SQLite is a file based db which all your db commands will work. By using @mcp we are attaching our tool to the mcp server. 
+Now whenever the client is trying to access your mcp server, first we will get the all tool list and then mcp client bind all those tools to your llm. So, we should want to always write @mcp attributes to understand what needs to be done by the mcp server. And with the mcp server we will have 3 components. Tools, resources, prompts
+
+in real time It won’t be like this, as all the code is already built we just need to attach this mcp client and use the app.
+uv run fastmcp dev main.py this  used to check whether everything in the configuration file correct or  not. With this we can know whether the error is in the file or desktop when we are connecting/attaching configure to the Claude desktop. So, when we run above command one tool like below will open which is mcp inspector, it will show whether this mcp server is working or not.
+
+Now afet confirmtion form mcp insector attach this to claude, so it will automatically excute this main.py file
+1)I would like to add the expense to DB can you help using mcp
+2)Add the avaible options 
+3)List the expense i spend in this month 
+
+
+-----------------
+Real Enterprise Flow
+User asks: Show Jira details for INC-101 and related Confluence documents.
+Flow:
+
+User
+ ↓
+
+MCP Client
+
+ ↓
+
+Enterprise MCP Server
+
+ ↓
+
+get_jira_ticket()
+
+ ↓
+
+get_confluence_page()
+
+ ↓
+
+Response
+
+Better Version For GitHub
+
+Instead of mocks:
+return {
+ "status":"Open"
+}
+you can integrate:
+requests.get(
+   "https://api.github.com/repos/..."
+)
+Similarly:
+Jira
+Jira REST API
+Confluence
+Confluence REST API
+
+. I created a custom MCP server using FastMCP where tools exposed enterprise systems such as Jira, GitHub, and Confluence. The MCP server acted as a standardized interface layer allowing AI assistants to retrieve ticket details, pull request information, and documentation through tool calls instead of building separate integrations for each system.
