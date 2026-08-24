@@ -1,0 +1,22 @@
+[project]
+name = "crewai-examples"
+version = "0.1.0"
+description = "CrewAI examples demonstrating sequential, tool-augmented, hierarchical (manager/worker), and peer-to-peer agent collaboration using Gemini 2.5 Flash."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+authors = [
+    { name = "Manoj Kumar Borra" }
+]
+dependencies = [
+    "crewai>=0.80.0",
+    "crewai-tools>=0.14.0",
+    "langchain-google-genai>=2.0.0",
+    "python-dotenv>=1.0.1",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
