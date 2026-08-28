@@ -72,4 +72,6 @@ Because `verbose=True` is on, you'll also see each agent "thinking" step by step
 | `Process.sequential` vs `Process.hierarchical` | How tasks flow — straight line vs boss-driven. |
 | `allow_delegation=True` | Lets an agent ask other agents for help. Turn it on for managers and peers. |
 
-verbose=True enables detailed execution logs for an agent, allowing us to see how the agent processes tasks, uses tools, collaborates with other agents, and generates outputs. It is mainly used for debugging, monitoring, and understanding workflow execution. verbose=False hides these details and returns only the final result.
+---
+
+Happy building!
