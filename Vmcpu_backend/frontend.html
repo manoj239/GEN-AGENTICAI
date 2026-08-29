@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>VM Stabilizer — Agent Event Stream</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    h1 {
+      color: #58a6ff;
+      margin-bottom: 8px;
+      font-size: 1.8rem;
+    }
+    
+    .subtitle {
+      color: #8b949e;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    button {
+      padding: 10px 18px;
+      background: #238636;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    
+    button:hover { background: #2ea043; }
+    
+    button.secondary {
+      background: #30363d;
+    }
+    
+    button.secondary:hover {
+      background: #484f58;
+    }
+    
+    .status-line {
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      border-radius: 6px;
+      background: #161b22;
+      color: #8b949e;
+      font-size: 0.9rem;
+      border-left: 3px solid #30363d;
+    }
+    
+    .status-line.connected {
+      color: #3fb950;
+      border-left-color: #3fb950;
+      background: #0d2818;
+    }
+    
+    .status-line.error {
+      color: #f85149;
+      border-left-color: #f85149;
+      background: #2d1014;
+    }
+    
+    .event-stream {
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #0d1117;
+      padding: 0;
+      max-height: 700px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    
+    .event-stream::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .event-stream::-webkit-scrollbar-track {
+      background: #161b22;
+    }
+    
+    .event-stream::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+    
+    .event-stream::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+    
+    .empty-state {
+      color: #8b949e;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    
+    .event {
+      border-bottom: 1px solid #30363d;
+      padding: 14px 16px;
+      border-left: 3px solid #58a6ff;
+      background: #0d1117;
+      transition: background 0.2s;
+    }
+    
+    .event:hover {
+      background: #161b22;
+    }
+    
+    .event.success {
+      border-left-color: #3fb950;
+    }
+    
+    .event.running {
+      border-left-color: #d29922;
+    }
+    
+    .event.error {
+      border-left-color: #f85149;
+    }
+    
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .agent-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .agent-name {
+      font-weight: bold;
+      color: #58a6ff;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    
+    .status-badge.success {
+      background: #0d2818;
+      color: #3fb950;
+    }
+    
+    .status-badge.running {
+      background: #2e1f06;
+      color: #d29922;
+    }
+    
+    .status-badge.error {
+      background: #2d1014;
+      color: #f85149;
+    }
+    
+    .timestamp {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+    
+    .task {
+      color: #79c0ff;
+      margin: 6px 0;
+      font-weight: 600;
+    }
+    
+    .description {
+      color: #8b949e;
+      margin: 4px 0;
+      font-size: 0.8rem;
+    }
+    
+    .output {
+      background: #161b22;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 8px;
+      color: #79c0ff;
+      font-size: 0.75rem;
+      max-height: 120px;
+      overflow-y: auto;
+      word-break: break-word;
+      border: 1px solid #30363d;
+    }
+    
+    .output-label {
+      font-size: 0.7rem;
+      color: #8b949e;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    
+    .stats {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .stat-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+    }
+    
+    .stat-label {
+      color: #8b949e;
+      font-size: 0.75rem;
+    }
+    
+    .stat-value {
+      color: #58a6ff;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>VM Stabilizer</h1>
+  <p class="subtitle">Agent Event Stream — Real-time Task Monitoring</p>
+  
+  <div class="controls">
+    <input type="text" id="backendUrl" placeholder="Backend URL (auto-detected: http://localhost:5000)" style="padding: 10px; border-radius: 6px; border: 1px solid #444; background: #161b22; color: #e6edf3; font-family: monospace; flex: 1; max-width: 500px;" />
+    <button onclick="runWorkflowLive()">Run Workflow (Live)</button>
+    <button onclick="connectStream()">Connect Stream</button>
+    <button class="secondary" onclick="clearEvents()">Clear Events</button>
+    <button class="secondary" onclick="loadDemoEvents()">Load Demo Data</button>
+  </div>
+  
+  <div class="status-line" id="status">Ready to connect...</div>
+
+  <div id="approvalPrompt" style="display:none; padding:14px 16px; margin-bottom:16px; border-radius:6px; background:#2e1f06; border-left:3px solid #d29922; color:#e6edf3;">
+    <div style="font-weight:600; color:#d29922; margin-bottom:8px;">⚠ Human Approval Required</div>
+    <div id="approvalMessage" style="margin-bottom:10px; color:#e6edf3; font-size:0.9rem;"></div>
+    <div style="display:flex; gap:10px;">
+      <button id="approveBtn" style="background:#238636;">Approve</button>
+      <button id="rejectBtn" class="secondary" style="background:#8b1e1e; color:#fff;">Reject</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <div class="stat-label">Total Events</div>
+      <div class="stat-value" id="eventCount">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Last Update</div>
+      <div class="stat-value" id="lastUpdate">--:--</div>
+    </div>
+  </div>
+  
+  <div class="event-stream" id="eventStream">
+    <div class="empty-state">
+      <p>Waiting for events...</p>
+      <p style="margin-top: 8px; font-size: 0.8rem;">Connect to the stream to see agent activities</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let eventSource = null;
+let eventCount = 0;
+
+function getBackendURL() {
+  const input = document.getElementById('backendUrl');
+  if (input.value.trim()) {
+    return input.value.trim();
+  }
+  // Auto-detect: use current host (works for jumphost access)
+  const hostname = window.location.hostname;
+  const port = 5000;
+  const protocol = 'http';
+  return `${protocol}://${hostname}:${port}`;
+}
+
+function initBackendURL() {
+  const autoDetectedURL = `http://${window.location.hostname}:5000`;
+  const input = document.getElementById('backendUrl');
+  input.placeholder = `Backend URL (auto-detected: ${autoDetectedURL})`;
+  if (!input.value.trim()) {
+    input.value = autoDetectedURL;
+  }
+}
+
+window.addEventListener('load', initBackendURL);
+
+function connectStream() {
+  if (eventSource) {
+    eventSource.close();
+  }
+  
+  const API_URL = getBackendURL();
+  console.log('Connecting to backend:', API_URL);
+  
+  eventCount = 0;
+  updateEventCount();
+  const container = document.getElementById('eventStream');
+  container.innerHTML = '<div class="empty-state"><p>Connecting to event stream...</p></div>';
+  
+  eventSource = new EventSource(`${API_URL}/api/agents/event-stream`);
+  
+  eventSource.onopen = () => {
+    const status = document.getElementById('status');
+    status.innerHTML = '✓ Stream connected — listening for agent events';
+    status.classList.remove('error');
+    status.classList.add('connected');
+    container.innerHTML = '';
+  };
+  
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      eventCount++;
+      updateEventCount();
+      addEventToUI(data);
+    } catch (e) {
+      console.error('Failed to parse event:', e);
+    }
+  };
+  
+  eventSource.onerror = () => {
+    const status = document.getElementById('status');
+    status.innerHTML = '✗ Stream connection failed';
+    status.classList.add('error');
+    status.classList.remove('connected');
+    eventSource.close();
+  };
+}
+
+function addEventToUI(event) {
+  const container = document.getElementById('eventStream');
+  
+  if (container.children.length === 0 || 
+      (container.children.length === 1 && container.children[0].classList.contains('empty-state'))) {
+    container.innerHTML = '';
+  }
+  
+  const statusClass = event.status === 'completed' ? 'success' : 
+                      event.status === 'error' ? 'error' : 'running';
+  const statusText = event.status.toUpperCase();
+  
+  const eventEl = document.createElement('div');
+  eventEl.className = `event ${statusClass}`;
+  
+  const rawOutput = typeof event.output === 'string' ? event.output : JSON.stringify(event.output);
+  const formatted = event.formatted_output && String(event.formatted_output).trim() !== ''
+    ? event.formatted_output
+    : rawOutput;
+  // Escape HTML then preserve newlines so bullet points render on separate lines
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const output = escapeHtml(formatted).replace(/\n/g, '<br>');
+  const timestamp = new Date(event.timestamp).toLocaleTimeString();
+  
+  eventEl.innerHTML = `
+    <div class="event-header">
+      <div class="agent-info">
+        <span class="agent-name">${event.agent}</span>
+        <span class="status-badge ${statusClass}">${statusText}</span>
+      </div>
+      <span class="timestamp">${timestamp}</span>
+    </div>
+    <div class="task">Task: ${event.task}</div>
+    <div class="description">${event.description}</div>
+    <div class="output">
+      <div class="output-label">Output</div>
+      ${output}
+    </div>
+  `;
+  
+  container.insertBefore(eventEl, container.firstChild);
+  
+  updateLastUpdate();
+  
+  // Keep only last 100 events
+  while (container.children.length > 100) {
+    container.removeChild(container.lastChild);
+  }
+}
+
+function updateEventCount() {
+  document.getElementById('eventCount').textContent = eventCount;
+}
+
+function updateLastUpdate() {
+  const now = new Date();
+  const time = now.toLocaleTimeString();
+  document.getElementById('lastUpdate').textContent = time;
+}
+
+function clearEvents() {
+  const API_URL = getBackendURL();
+  fetch(`${API_URL}/api/agents/events/clear`, { method: 'POST' })
+    .then(() => {
+      eventCount = 0;
+      updateEventCount();
+      document.getElementById('eventStream').innerHTML = 
+        '<div class="empty-state"><p>Events cleared</p></div>';
+    })
+    .catch(err => console.error('Clear failed:', err));
+}
+
+// ─────────────────────────────────────────────
+// Trigger workflow via POST /run_vm_stabilizer_stream_live
+// and render each streamed SSE line as it arrives.
+// ─────────────────────────────────────────────
+function showApprovalPrompt(API_URL, data) {
+  const promptEl = document.getElementById('approvalPrompt');
+  const msgEl = document.getElementById('approvalMessage');
+  const approveBtn = document.getElementById('approveBtn');
+  const rejectBtn = document.getElementById('rejectBtn');
+
+  msgEl.textContent = data.message || 'Awaiting operator decision.';
+  promptEl.style.display = 'block';
+
+  const submit = async (decision) => {
+    approveBtn.disabled = true;
+    rejectBtn.disabled = true;
+    try {
+      const res = await fetch(`${API_URL}/submit_decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: data.thread_id, decision })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Submit failed: ${err.error || res.status}`);
+        approveBtn.disabled = false;
+        rejectBtn.disabled = false;
+        return;
+      }
+      const statusEl = document.getElementById('status');
+      statusEl.innerHTML = decision === 'approve'
+        ? '✓ Approved — continuing to RestartProcessAgent…'
+        : '✗ Rejected — routing to SkipAgent and ending workflow…';
+      hideApprovalPrompt();
+    } catch (e) {
+      alert(`Submit failed: ${e.message}`);
+      approveBtn.disabled = false;
+      rejectBtn.disabled = false;
+    }
+  };
+
+  approveBtn.disabled = false;
+  rejectBtn.disabled = false;
+  approveBtn.onclick = () => submit('approve');
+  rejectBtn.onclick = () => submit('reject');
+}
+
+function hideApprovalPrompt() {
+  document.getElementById('approvalPrompt').style.display = 'none';
+}
+
+async function runWorkflowLive() {
+  const API_URL = getBackendURL();
+  const status = document.getElementById('status');
+  const container = document.getElementById('eventStream');
+
+  // Reset UI
+  eventCount = 0;
+  updateEventCount();
+  container.innerHTML = '<div class="empty-state"><p>Triggering workflow…</p></div>';
+  status.innerHTML = '⏳ Starting workflow…';
+  status.classList.remove('error');
+  status.classList.remove('connected');
+
+  try {
+    const response = await fetch(`${API_URL}/run_vm_stabilizer_stream_live`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
+      },
+      body: JSON.stringify({
+        request: {}   // optional overrides for the workflow input
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    status.innerHTML = '✓ Workflow running — streaming agent outputs live';
+    status.classList.add('connected');
+    container.innerHTML = '';
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are separated by a blank line ("\n\n")
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop(); // keep the incomplete tail in the buffer
+
+      for (const frame of frames) {
+        const line = frame.split('\n').find(l => l.startsWith('data:'));
+        if (!line) continue;
+        const dataStr = line.slice(5).trim();
+        if (!dataStr) continue;
+
+        let data;
+        try {
+          data = JSON.parse(dataStr);
+        } catch (e) {
+          console.warn('Bad SSE JSON:', dataStr);
+          continue;
+        }
+
+        // Terminal messages
+        if (data.error) {
+          status.innerHTML = `✗ Error: ${data.error}`;
+          status.classList.add('error');
+          status.classList.remove('connected');
+          continue;
+        }
+        if (data.status === 'started') {
+          continue; // initial ping
+        }
+        if (data.status === 'awaiting_approval') {
+          showApprovalPrompt(API_URL, data);
+          continue;
+        }
+        if (data.status === 'completed') {
+          hideApprovalPrompt();
+          status.innerHTML = `✓ Workflow completed — decision: ${data.summary?.decision || 'n/a'} — ${data.agents_streamed} agent(s) streamed`;
+          continue;
+        }
+
+        // Agent event
+        eventCount++;
+        updateEventCount();
+        addEventToUI({
+          id: Math.random().toString(36).slice(2, 11),
+          timestamp: data.timestamp || new Date().toISOString(),
+          agent: data.agent,
+          task: data.task,
+          description: data.description,
+          output: data.output,
+          formatted_output: data.formatted_output || '',
+          status: data.status || 'completed'
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Live workflow stream failed:', err);
+    status.innerHTML = `✗ Live workflow failed: ${err.message}`;
+    status.classList.add('error');
+    status.classList.remove('connected');
+  }
+}
+
+function loadDemoEvents() {
+  clearEvents();
+  
+  const events = [
+    { agent: "ServiceNowAgent", task: "Fetch Incident", description: "Connecting to ServiceNow and fetching INC0887758", output: '{"incident_id":"INC0887758","service":"apache2","state":"stopped","vm":"192.168.1.100"}' },
+    { agent: "PlannerAgent", task: "Generate Execution Plan", description: "Creating 7-step workflow to stabilize VM", output: '{"steps":7,"plan":"health_checks→human_approval→restart"}' },
+    { agent: "CIReachabilityAgent", task: "VM Connectivity Diagnostic", description: "Diagnosing VM connectivity using hostname and IP ping tests", output: '{"host":"192.168.1.100","packets_sent":4,"packets_received":4,"packet_loss_percent":0,"avg_rtt_ms":15.77,"status":"success"}' },
+    { agent: "DiskHealthCheckAgent", task: "Disk Usage Check", description: "Running df -h on VM to check root partition", output: '{"disk_usage_percent":45,"threshold":90,"status":"pass"}' },
+    { agent: "MemoryHealthAgent", task: "Memory Usage Check", description: "Running free -m on VM to check available memory", output: '{"memory_used_percent":52,"threshold":90,"status":"pass"}' },
+    { agent: "CPUHealthCheckAgent", task: "CPU Load Check", description: "Running top -bn1 on VM to check CPU load average", output: '{"cpu_usage_percent":38.5,"threshold":85,"status":"pass"}' },
+    { agent: "ProcessCheckAgent", task: "Service State Verification", description: "Running systemctl status apache2 to verify service state", output: '{"service":"apache2","state":"stopped","needs_restart":true}' },
+    { agent: "RestartProcessAgent", task: "Service Restart", description: "Running systemctl restart apache2 on VM via SSH", output: '{"service":"apache2","action":"restart","status":"success","new_state":"running"}' }
+  ];
+  
+  let delay = 600;
+  events.forEach((evt, idx) => {
+    setTimeout(() => {
+      const event = {
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date().toISOString(),
+        ...evt,
+        status: 'completed'
+      };
+      addEventToUI(event);
+    }, delay * (idx + 1));
+  });
+}
+
+// Auto-populate backend URL on load (but don't auto-connect yet)
+window.addEventListener('load', () => {
+  initBackendURL();
+});
+</script>
+
+</body>
+</html>
