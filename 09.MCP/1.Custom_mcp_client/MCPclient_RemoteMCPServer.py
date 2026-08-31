@@ -12,7 +12,7 @@ SERVERS = {
         "transport": "streamable_http",
         "url": "https://prudvi-remote-mcp-server.fastmcp.app/mcp",
         "headers": {
-            "Authorization": "Bearer fmcp_h4sB87CnfsaanQc9F_x73mOZkJFba67wJKLpNnPzIIk"
+            "Authorization": ""
         }
     }
 }
