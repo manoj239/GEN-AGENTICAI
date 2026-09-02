@@ -16,7 +16,7 @@ print(result.content)
 """
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
-os.environ["GOOGLE_API_KEY"] = "AQ.Ab8RN6IPW5J1OacLx0XzbhKtZc-pTIk9nanqIBSG8qQppKjUUg"
+os.environ["GOOGLE_API_KEY"] = ""
 
 # Initialize model
 model = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
