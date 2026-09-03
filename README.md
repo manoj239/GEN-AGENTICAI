@@ -161,9 +161,7 @@ This demonstrates cloud-based generative AI using enterprise AI services.
 
 ---
 
-## Interview-Ready Highlights
-
-These are the main proof-of-concepts that can be discussed in interviews:
+## Highlights
 
 - Built a chatbot using Gradio + FastAPI + Gemini
 - Implemented RAG over PDFs with vector search and embeddings
