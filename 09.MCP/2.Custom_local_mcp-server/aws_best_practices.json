@@ -1,0 +1,26 @@
+{
+  "security": [
+    "Enable MFA for all users",
+    "Rotate access keys periodically",
+    "Apply least privilege access",
+    "Use IAM roles instead of long-term credentials"
+  ],
+
+  "monitoring": [
+    "Enable CloudWatch metrics",
+    "Enable CloudTrail logging",
+    "Create CloudWatch alarms for critical workloads"
+  ],
+
+  "operations": [
+    "Use Auto Scaling for production workloads",
+    "Schedule backups regularly",
+    "Patch operating systems regularly"
+  ],
+
+  "cost_optimization": [
+    "Use Reserved Instances for predictable workloads",
+    "Delete unused EBS volumes",
+    "Review idle EC2 instances regularly"
+  ]
+}

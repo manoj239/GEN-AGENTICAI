@@ -55,6 +55,58 @@ research_task = Task(
     ),
     agent=researcher
 )
+"""
+# Research Task
+
+research_task = Task(
+    description=(
+        "Search the web and find the latest news and developments about "
+        "'Gemini 2.5 Flash by Google'."
+    ),
+    expected_output=(
+        "A detailed summary with key features and comparisons."
+    ),
+    agent=researcher
+)
+
+# Execute Research
+
+research_result = research_task.execute_sync()
+
+print("\nResearch Output:\n")
+print(research_result)
+
+# Human Approval
+
+approval = input(
+    "\nApprove research output? (yes/no): "
+)
+
+if approval.lower() != "yes":
+
+    print("Rejected by Human.")
+    exit()
+
+# Writer Task
+
+writing_task = Task(
+    description=(
+        "Using the research provided, write a 400-word blog post."
+    ),
+    expected_output=(
+        "A blog post with introduction, key points, and conclusion."
+    ),
+    agent=writer
+)
+
+# Execute Writer
+
+writing_result = writing_task.execute_sync()
+
+print("\nFinal Blog:\n")
+print(writing_result)
+"""
+
 
 writing_task = Task(
     description=(

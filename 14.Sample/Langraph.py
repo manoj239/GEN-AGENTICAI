@@ -1,161 +1,167 @@
+import os
 from typing import TypedDict
-from huggingface_hub import User
-from langgraph.graph import (StateGraph, END)
-from langgraph.checkpoint.memory import (MemorySaver)
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 # =====================================
-# MCP TOOL
+# LLM  (Gemini 2.5)
 # =====================================
 
-def fetch_incident_from_servicenow(incident_id:str):
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    temperature=0,
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+)
 
-    print(f"Fetching {incident_id} from ServiceNow MCP")
+# =====================================
+# MCP TOOL  (ServiceNow stub)
+# =====================================
 
+def fetch_incident_from_servicenow(incident_id: str) -> dict:
+    print(f"[MCP] Fetching {incident_id} from ServiceNow")
     return {
-
-        "short_desc": "Apache Service Down",
-
-        "severity": "High"
+        "short_desc": "Apache Service Down on VM-APP-01",
+        "severity": "High",
+        "type": "application",
+        "asset": "VM-APP-01",
     }
 
 # =====================================
-# STATE
+# STATE  (shared across all agents)
 # =====================================
 
 class IncidentState(TypedDict):
     incident_id: str
     incident_data: dict
-    analysis: str
+    diagnostic_output: str
+    health_analysis: str
+    rca: str
+    recommended_steps: str
     approval: str
     remediation: str
-# =====================================
-# NODE 1
-# ORCHESTRATOR
-# =====================================
-
-def orchestrator(state:IncidentState):
-    print("Orchestrator Started")
-    return state
 
 # =====================================
-# NODE 2
-# MCP TOOL CALL
+# AGENT 1 - TRIAGE
 # =====================================
 
-def intake_agent(state:IncidentState):
-    incident = fetch_incident_from_servicenow(
-        state["incident_id"]
+def triage_agent(state: IncidentState):
+    print("[1] Triage Agent")
+    incident = fetch_incident_from_servicenow(state["incident_id"])
+    return {"incident_data": incident}
+
+# =====================================
+# AGENT 2 - COMMAND EXECUTOR & LOG EXTRACTOR
+# =====================================
+
+def command_executor_agent(state: IncidentState):
+    print("[2] Command Executor & Log Extractor")
+    asset = state["incident_data"]["asset"]
+    diagnostic_output = (
+        f"ping {asset}: 100% packet loss | "
+        f"ssh {asset}: connection refused | "
+        f"logs: Apache exited with code 1"
     )
-    return {"incident_data":  incident}
+    return {"diagnostic_output": diagnostic_output}
 
 # =====================================
-# NODE 3
-# ANALYSIS AGENT
+# AGENT 3 - DIAGNOSTIC  (LLM)
 # =====================================
 
-def analysis_agent(state:IncidentState):
-    analysis = f"""
-    RCA:
-    Service outage identified
-    """
-    return { "analysis":  analysis}
+def diagnostic_agent(state: IncidentState):
+    print("[3] Diagnostic Agent  (LLM)")
+    prompt = [
+        SystemMessage(content="You analyze VM/server health from diagnostic output. Answer in 2 lines."),
+        HumanMessage(content=(
+            f"Incident: {state['incident_data']}\n"
+            f"Diagnostic output: {state['diagnostic_output']}\n"
+            "Assess current vs historical health."
+        )),
+    ]
+    result = llm.invoke(prompt)
+    return {"health_analysis": result.content}
 
 # =====================================
-# ROUTER
-# CONDITIONAL EDGE
+# AGENT 4 - RCA / ANALYSIS  (LLM + RAG placeholder)
 # =====================================
 
-def need_remediation( state:IncidentState):
-    severity = state[ "incident_data"]["severity"]
-    if severity == "High":
-        return "approval"
-    return "end"
+def rca_agent(state: IncidentState):
+    print("[4] RCA / Analysis Agent  (LLM + RAG)")
+    # In prod: retrieve top-k chunks from Runbooks/SOPs/KB/SharePoint vector store.
+    runbook_context = "Runbook RB-APACHE-01: restart httpd, verify port 80, tail error_log."
+    prompt = [
+        SystemMessage(content="You are an SRE. Ground your RCA strictly in the runbook context."),
+        HumanMessage(content=(
+            f"Incident: {state['incident_data']}\n"
+            f"Health: {state['health_analysis']}\n"
+            f"Runbook: {runbook_context}\n"
+            "Return RCA and numbered remediation steps."
+        )),
+    ]
+    result = llm.invoke(prompt)
+    return {"rca": result.content, "recommended_steps": runbook_context}
 
 # =====================================
-# NODE 4
-# HUMAN IN LOOP
+# CONDITIONAL EDGE 1 - need remediation?
 # =====================================
 
-def approval_agent(state:IncidentState):
-
-    approval = input("Approve remediation? (yes/no): " )
-
-    return { "approval":  approval}
+def need_remediation(state: IncidentState):
+    return "remediation" if state["incident_data"]["severity"] == "High" else "end"
 
 # =====================================
-# ROUTER
+# AGENT 5 - REMEDIATION  (HITL + execute)
 # =====================================
 
-def approval_router( state:IncidentState):
-    if state["approval"] == "yes":
-        return "remediation"
-    return "end"
+def remediation_agent(state: IncidentState):
+    print("[5] Remediation Agent  (HITL)")
+    print(f"    RCA: {state['rca']}")
+    approval = input("    Approve remediation? (yes/no): ").strip().lower()
+    return {"approval": approval}
 
 # =====================================
-# NODE 5
-# REMEDIATION AGENT
+# CONDITIONAL EDGE 2 - approved?
 # =====================================
 
-def remediation_agent(state:IncidentState):
-    action = """
-    Restart Apache Service
-    """
-    return { "remediation": action}
+def approval_router(state: IncidentState):
+    return "execute" if state["approval"] == "yes" else "end"
 
-# =====================================
-# CHECKPOINTER
-# MEMORY
-# =====================================
-
-memory = MemorySaver()
+def execute_remediation(state: IncidentState):
+    print("[5b] Executing remediation")
+    return {"remediation": f"Executed: {state['recommended_steps']}"}
 
 # =====================================
 # GRAPH
 # =====================================
 
+memory = MemorySaver()
 builder = StateGraph(IncidentState)
-builder.add_node("orchestrator",orchestrator)
-builder.add_node("intake",intake_agent)
-builder.add_node("analysis",analysis_agent)
-builder.add_node("approval",approval_agent)
-builder.add_node("remediation",remediation_agent)
-# =====================================
-# EDGES
-# =====================================
 
-builder.set_entry_point("orchestrator")
+builder.add_node("triage", triage_agent)
+builder.add_node("cmd_log", command_executor_agent)
+builder.add_node("diagnostic", diagnostic_agent)
+builder.add_node("rca", rca_agent)
+builder.add_node("remediation", remediation_agent)
+builder.add_node("execute", execute_remediation)
 
-builder.add_edge( "orchestrator",  "intake")
-
-builder.add_edge( "intake", "analysis")
+builder.set_entry_point("triage")
+builder.add_edge("triage", "cmd_log")
+builder.add_edge("cmd_log", "diagnostic")
+builder.add_edge("diagnostic", "rca")
 
 builder.add_conditional_edges(
-    "analysis",
+    "rca",
     need_remediation,
-
-    {
-
-        "approval":"approval",
-
-        "end":END
-    }
+    {"remediation": "remediation", "end": END},
 )
 
 builder.add_conditional_edges(
-
-    "approval",
-
+    "remediation",
     approval_router,
-
-    {
-
-        "remediation":"remediation",
-
-        "end":END
-    }
+    {"execute": "execute", "end": END},
 )
 
-builder.add_edge( "remediation", END)
+builder.add_edge("execute", END)
 
 graph = builder.compile(checkpointer=memory)
 
@@ -163,88 +169,11 @@ graph = builder.compile(checkpointer=memory)
 # EXECUTION
 # =====================================
 
-graph.invoke( {
-
-        "incident_id":
-            "INC1001"
-    }
-)
-
-I designed the workflow using LangGraph's StateGraph. The state object carried incident 
-information across agents. The orchestrator initiated the workflow. The intake agent 
-invoked a ServiceNow MCP tool to retrieve incident details. The analysis agent performed 
-. Conditional routing determined whether remediation was required. For high-severity incidents, 
-the workflow moved to a Human-in-the-Loop approval step. After approval, the remediation agent 
-executed corrective actions. I used LangGraph's MemorySaver as a checkpointer to persist workflow state and 
-support resumability. This architecture demonstrates agent collaboration, orchestration, memory, 
-tool integration, and enterprise automation patterns.
-
-# =====================================================================
-# CONCEPT MAPPING TABLE
-# =====================================================================
-# +--------------------------+----------------------------------------------+
-# | Concept                  | Implementation                               |
-# +--------------------------+----------------------------------------------+
-# | State Management         | IncidentState (TypedDict)                    |
-# | Nodes                    | Orchestrator, Intake, Analysis, Approval,    |
-# |                          | Remediation                                  |
-# | Edges                    | add_edge() / add_conditional_edges()         |
-# | Agent Collaboration      | Analysis -> Approval -> Remediation          |
-# | Tool Calling             | ServiceNow MCP Tool                          |
-# | MCP                      | fetch_incident_from_servicenow()             |
-# | Human Approval           | approval_agent()                             |
-# | Persistence              | MemorySaver()                                |
-# | Workflow Orchestration   | Orchestrator coordinates flow                |
-# | Memory Checkpointer      | MemorySaver()                                |
-# +--------------------------+----------------------------------------------+
+if __name__ == "__main__":
+    config = {"configurable": {"thread_id": "INC1001"}}
+    final_state = graph.invoke({"incident_id": "INC1001"}, config=config)
+    print("\n=== FINAL STATE ===")
+    for k, v in final_state.items():
+        print(f"{k}: {v}")
 
 
-
-#Architecture
-#
-#                        +------------------+
-#                        |       User       |
-#                        +------------------+
-#                                 |
-#                                 v
-#                        +--------------------+
-#                        | Orchestrator Agent |
-#                        +--------------------+
-#                                 |
-#                                 v
-#                        +-----------------------------+
-#                        | Intake Agent (MCP Tool)     |
-#                        | fetch_incident_from_service |
-#                        +-----------------------------+
-#                                 |
-#                                 v
-#                        +------------------+
-#                        |  Analysis Agent  |
-#                        +------------------+
-#                                 |
-#                                 v
-#                        +---------------------+
-#                        |  Need Remediation?  |
-#                        +---------------------+
-#                             |          |
-#                          NO |          | YES
-#                             v          v
-#                        +-------+   +------------------+
-#                        |  END  |   |  Human Approval  |
-#                        +-------+   +------------------+
-#                                             |
-#                                             v
-#                                    +----------------+
-#                                    |   Approved?    |
-#                                    +----------------+
-#                                       |        |
-#                                    YES|        |NO
-#                                       v        v
-#                            +--------------------+  +-------+
-#                            | Remediation Agent  |  |  END  |
-#                            +--------------------+  +-------+
-#                                     |
-#                                     v
-#                                 +-------+
-#                                 |  END  |
-#                                 +-------+

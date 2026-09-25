@@ -1,39 +1,51 @@
 #AI-Powered Form Processing Workflow using n8n + Gemini + MCP
-                  Form Submission
-                         │
-                         ▼
+                        Form Submission
+                              │
+                              ▼
                    On Form Submission Trigger
-                         │
-                         ▼
-                        AI Agent
-                         │
-                   ┌─────┴─────┐
-                   │           │
-                   ▼           ▼
-                  Gemini     MCP Client
-                  LLM         Tools
-                         │
-                         ▼
-                   Decision Logic
-                         │
-                         ▼
-                        IF
-                     ┌──┴───┐
-                     │      │
-                ()  True    False
-                   │        │
-                   ▼        ▼
-                  Gmail   Edit Fields
-                  Send     Update
-                  Message  Data
+                              │
+                              ▼
+                    ┌──────────────────────┐
+                    │       AI Agent       │
+                    │     (Gemini LLM)     │
+                    └──────────────────────┘
+                              │
+                              ▼
+                    ┌──────────────────────┐
+                    │      MCP Client      │
+                    └──────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+           ┌──────┐       ┌────────┐     ┌────────────┐
+           │ Jira │       │ GitHub │     │ Confluence │
+           │ MCP  │       │  MCP   │     │    MCP     │
+           └──────┘       └────────┘     └────────────┘
+              │               │               │
+              └───────────────┼───────────────┘
+                              ▼
+                       Decision Logic
+                              │
+                              ▼
+                             IF
+                          ┌───┴────┐
+                          │        │
+                        True     False
+                          │        │
+                          ▼        ▼
+                       ┌──────┐  ┌────────────┐
+                       │Gmail │  │Edit Fields │
+                       │ Send │  │  Update    │
+                       └──────┘  └────────────┘
 
 True-positive, False-negitive
-This is an AI-powered workflow built using n8n where a form submission triggers a 
-Gemini-powered AI Agent. The agent analyzes the user's request and can interact with 
-enterprise systems through an MCP Client, such as Jira for ticket management, GitHub
-for repository or pull request information, and Confluence for documentation lookup.
-Based on the AI's decision and business rules, the workflow either performs actions
-like creating tickets, retrieving information, updating records, or sends notifications
-through email. If negative comes it will goes to edit field, if positive it will go to Gmail
-This demonstrates how Agentic AI, MCP,  and workflow automation can be 
-combined to build intelligent enterprise solutions."
+
+The objective of this POC was to demonstrate enterprise workflow automation using Agentic AI. 
+I developed an n8n workflow where a form submission acts as the trigger. The submitted request
+is sent to a Gemini-powered AI agent.The AI agent uses MCP to discover and interact with
+enterprise tools such as Jira, GitHub, and Confluence. Based on the user's request, it can perform 
+actions like creating Jira tickets, retrieving GitHub repository information, fetching Confluence
+documentation, and generating summaries. MCP provides a standardized way for the agent to access 
+these tools without requiring custom integrations for every application. The workflow combines 
+AI-driven decision-making with enterprise tool automation, reducing manual effort and improving
+operational efficiency.
