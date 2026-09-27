@@ -65,6 +65,7 @@ reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 #    """
 #)
 #print(response.content)
+#processed_doc = Document(page_content=response.content)
 #splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 #chunks = splitter.split_documents([processed_doc])
 #For text-based PDFs I use PyPDFLoader. For image-heavy, scanned, or table-rich documents,
