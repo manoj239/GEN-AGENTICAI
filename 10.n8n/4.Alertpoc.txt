@@ -32,10 +32,11 @@
               Store Report
            (Google Sheet/DB)
 
-"I built an AI-powered incident management workflow in n8n. Monitoring alerts from 
-CloudWatch or Prometheus trigger the workflow through a webhook. The workflow collects
-incident details and sends them to a Gemini-powered AI Agent, which analyzes logs and 
-metrics to generate an RCA summary. If the analysis is successful, a Jira ticket is 
-automatically created, stakeholders are notified through Slack or Teams, and the final 
-incident report is stored for future reference.  This helps reduce manual analysis effort
- and improves incident response time.
+I built an AI-powered Incident Management workflow using n8n. The solution follows an event-driven
+architecture where alerts from monitoring tools automatically trigger the workflow. goal would be 
+to automate incident analysis, RCA generation, and stakeholder communication. Monitoring 
+alerts from  CloudWatch or Prometheus trigger the workflow through a webhook. The workflow collects
+incident details and sends them to a Gemini-powered AI Agent, which analyzes logs and metrics to
+generate an RCA summary. If the analysis is successful, a Jira ticket is automatically created,
+stakeholders are notified through Slack or Teams, and the final  incident report is stored for
+future reference.  This helps reduce manual analysis effort  and improves incident response time.

@@ -30,3 +30,11 @@ gr.ChatInterface(
 )
 
 #access through ->http://localhost:7860/
+
+200 -> Successful requests
+201 -> Resource created
+400 -> Bad request
+401 -> Authentication required/failed
+403 -> Forbidden
+404 -> Resource not found
+500 -> Server-side error
