@@ -1,3 +1,45 @@
+"""I worked on a Domain-Aware Agentic RAG Assistant for enterprise knowledge management and 
+technical-support use cases. The main objective was to help users find accurate information from
+internal application documentation, troubleshooting guides, API specifications, release notes,
+and knowledge articles without manually searching multiple sources. The solution was built using
+LangChain, Gemini, embeddings, ChromaDB, semantic retrieval, and CrossEncoder reranking. We 
+implemented document ingestion, chunking, embedding generation, and vector retrieval. For more 
+complex queries, we explored Agentic RAG and Corrective RAG patterns so the workflow could
+assess retrieval quality, refine the query, retrieve additional evidence when needed, and generate
+a grounded response. From a production architecture perspective, the application would expose a 
+FastAPI endpoint to the client portal. Enterprise authentication and authorization would protect
+access, and the application could run as containerized services in private cloud subnets behind a
+load balancer. A production deployment could use autoscaling, CI/CD, centralized logging, 
+monitoring, and secrets management. The document ingestion pipeline would process approved
+knowledge sources, split documents into chunks, generate embeddings, and update the vector index. 
+At query time, the workflow would retrieve relevant passages, rerank them, assess whether the
+evidence was sufficient, and then generate the answer using Gemini.We used RAGAS-based evaluation
+to assess faithfulness, answer relevance, and context quality, helping us identify areas for 
+improvement. The key value was reducing manual knowledge-search effort and providing more 
+relevant, consistent, and context-aware responses. For any specific production details, such as 
+the final hosting platform, load balancer, number of end users, and autoscaling configuration, I 
+would describe the actual client implementation rather than assume those components were deployed.
+
+from transformers import pipeline
+
+
+Application container      -> FastAPI, LangChain, RAG workflow
+Application Load Balancer  -> Distributes incoming requests across healthy application instances
+ECS/ EKS deployment        -> Maintains the desired number of running application instances
+Auto Scaling               -> Adds or removes instances based on suitable metrics
+CloudWatch                 -> Collects application logs, infrastructure metrics and alerts
+CI/CD pipeline             -> Tests, builds, scans and deploys new application versions
+Secrets Manager / IAM      -> Controls credentials and service permissions
+
+User → SSO/API access → Load balancer → FastAPI containers → RAG workflow → vector
+database + Gemini API → response
+
+For monitoring, I would track API latency, error rates, retrieval latency, LLM latency, token usage
+,retrieval quality, and the percentage of queries requiring corrective retrieval.
+
+For evaluation, RAGAS can help assess faithfulness, answer relevance, and context quality. LangSmith
+can help trace the workflow and troubleshoot retrieval or generation failures.
+"""
 from dotenv import load_dotenv
 from langchain_google_genai import (ChatGoogleGenerativeAI,GoogleGenerativeAIEmbeddings)
 from langchain_community.document_loaders import PyPDFLoader
@@ -328,9 +370,7 @@ if best_score > 1:
 
 else:
 
-    context = "\n\n".join(
-        [doc.page_content for doc, score in results]
-    )
+    context = "\n\n".join([doc.page_content for doc, score in results])
 
 response = llm.invoke(
     f"""
@@ -351,6 +391,14 @@ Interview note:
         ↓
 Good? → Use RAG
 Bad?  → Use Web Search
+
+1.Takes a user query.
+2.Searches the vector database.
+3.Checks the retrieval score.
+4.If retrieval quality is poor:
+    Uses Web Search.
+5.Otherwise:
+    Uses retrieved documents as context.
 
 #5. Self-RAG: LLM evaluates the retrieved context itself.
 from langchain_community.utilities import GoogleSerperAPIWrapper
@@ -416,9 +464,7 @@ docs = vectorstore.similarity_search(
 )
 
 # Reranker Model
-reranker = CrossEncoder(
-    "cross-encoder/ms-marco-MiniLM-L-6-v2"
-)
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # Create Query-Document Pairs
 pairs = [
