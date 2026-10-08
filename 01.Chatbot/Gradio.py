@@ -36,5 +36,6 @@ gr.ChatInterface(
 400 -> Bad request
 401 -> Authentication required/failed
 403 -> Forbidden
-404 -> Resource not found
+404 -> Resource/model not found
+429 -> Too many requests. Quota exceeded.
 500 -> Server-side error
