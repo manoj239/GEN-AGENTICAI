@@ -60,6 +60,12 @@ are for.
 | Validation / Safeguards | `validation_agent` + `compliance_agent` + Approval gate | Post-change checks + audit trail |
 | Persistence / Memory | `MemorySaver()` checkpointer | Resumable, durable workflow |
 | Supervisor Pattern | `supervisor_agent` as workflow overseer | Governance of the multi-agent flow |
+| Error Handling | `@guarded_node` on every agent | Failures become state, not crashes |
+| Retry Logic | `@resilient(timeout, retries)` on every tool / LLM call | Bounded exponential backoff + jitter |
+| Timeouts | `TOOL_TIMEOUT` / `LLM_TIMEOUT` / `HITL_TIMEOUT` | No call or human can hang the graph |
+| Idempotency | `produces=` on `@guarded_node` + `idempotency_key` | A node never re-runs after it has produced its output |
+| Budgets / Limits | `MAX_TOOL_CALLS`, `MAX_NODE_ATTEMPTS`, `MAX_REMEDIATION_ATTEMPTS`, `recursion_limit` | Hard termination guarantees |
+| Rollback | `rollback_agent` + `validation_router` | Undo a bad patch after retries are exhausted |
 
 ---
 
@@ -181,6 +187,18 @@ Supervisor pattern used here.
                     |
                     v
         +--------------------------+
+        |   Services Healthy ?     |
+        +--------------------------+
+           |          |          |
+        YES|   retry  |          | attempts exhausted
+           |  (<= 2)  |          |
+           |          v          v
+           |   [ Remediation ]  +------------------+
+           |                    | Rollback Agent   |
+           |                    +------------------+
+           |                             |
+           v                             v
+        +--------------------------+ <---+
         | Compliance Report Agent  |
         +--------------------------+
                     |
@@ -188,6 +206,8 @@ Supervisor pattern used here.
                 +-------+
                 |  END  |
                 +-------+
+
+  Any node failure / budget breach -> [ Failure Handler ] -> END
 
      [ MemorySaver checkpointer wraps the whole graph ]
 ```
@@ -238,9 +258,11 @@ Decision points:
 | `risk_analysis_agent` | Classify risk level | `state["patch_data"]["critical"]` | `risk_level` = "HIGH"/"LOW" | — |
 | `runbook_agent` (RAG) | Retrieve operational runbook | `state` | `runbook` text | `retrieve_runbook()` (MCP) |
 | `approval_agent` | Get human go/no-go | `state` | `approval` = "yes"/"no" | Console `input()` (HITL) |
-| `remediation_agent` | Apply patches | `state` | `remediation` = "Patches installed successfully" | — |
-| `validation_agent` | Confirm services are healthy after patching | `state` | `validation` = "Services Healthy" | — |
-| `compliance_agent` | Emit compliance/audit report | `state` | Log message; state unchanged | — |
+| `remediation_agent` | Apply patches (bounded attempts + idempotency key) | `state` | `remediation`, `remediation_attempts` | `apply_patches()` (MCP) |
+| `validation_agent` | Confirm services are healthy after patching | `state` | `validation` | `check_service_health()` (MCP) |
+| `rollback_agent` | Undo the patch when validation keeps failing | `state` | `remediation`, `status="rolled_back"` | `rollback_patches()` (MCP) |
+| `compliance_agent` | Emit compliance/audit report (raw fallback if LLM down) | `state` | `compliance_report`, final `status` | LLM |
+| `failure_handler` | Terminal node for failed/aborted runs; escalates to on-call | `state` | `status`, `remediation` note | — |
 
 ---
 
@@ -249,13 +271,23 @@ Decision points:
 The workflow uses a single typed state object:
 
 ```python
-class PatchState(TypedDict):
+class PatchState(TypedDict, total=False):
     patch_data: dict
     risk_level: str
+    risk_reason: str
     runbook: str
     approval: str
     remediation: str
     validation: str
+    compliance_report: str
+    # resilience bookkeeping
+    status: str                   # running | completed | failed | aborted | rolled_back
+    failed_node: str
+    errors: List[str]
+    tool_calls: int
+    node_attempts: Dict[str, int]
+    remediation_attempts: int
+    idempotency_key: str
 ```
 
 How information flows:
@@ -299,10 +331,99 @@ Conditional edges:
 
 Where the workflow can branch, stop, or continue:
 
-- **Single branch — approval-based:** if the human says "no", the workflow
-  *stops* before any change; if "yes", it *continues* through remediation →
-  validation → compliance.
-- There is **no auto-retry loop** in this implementation.
+- **Approval branch:** if the human says "no" (or times out), the workflow
+  *stops* before any change; if "yes", it continues to remediation.
+- **Validation branch (`validation_router`):**
+  - `validation == "Services Healthy"` → `compliance`.
+  - unhealthy **and** `remediation_attempts < MAX_REMEDIATION_ATTEMPTS` →
+    `remediation` (bounded retry loop).
+  - unhealthy **and** attempts exhausted → `rollback` → `compliance`.
+- **Failure short-circuit (`continue_or_fail`):** after every linear step, if
+  `status` is `failed`/`aborted` the graph jumps to the terminal `failure`
+  node and ends.
+
+---
+
+## 11b. Error Handling, Retries, Idempotency & Termination
+
+### Config knobs (top of `Patch.py`)
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `MAX_RETRIES` | 3 | Attempts per tool / LLM call |
+| `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | 1.0s / 8.0s | Exponential backoff with jitter |
+| `TOOL_TIMEOUT` | 15s | Hard timeout per MCP tool call |
+| `LLM_TIMEOUT` | 45s | Hard timeout per LLM call |
+| `HITL_TIMEOUT` | 300s | Max wait for approval, then auto-deny |
+| `MAX_TOOL_CALLS` | 20 | Tool-call budget for the whole run |
+| `MAX_NODE_ATTEMPTS` | 2 | **How often any single node may execute in a run** |
+| `MAX_REMEDIATION_ATTEMPTS` | 2 | Patch install attempts before rollback |
+| `RECURSION_LIMIT` | 30 | LangGraph super-step limit (runaway-loop guard) |
+
+### 1. Retry logic — `@resilient(timeout, retries)`
+Every MCP tool and LLM call is wrapped. It submits the call to a thread pool
+and enforces a **hard timeout**, then retries with **exponential backoff +
+jitter** (1s → 2s → 4s, capped at 8s). When attempts are exhausted it raises
+`NodeFailure`. The LLM client is configured with `max_retries=0` so the
+provider SDK does not silently multiply the retry count (3 × 3 = 9 calls).
+The change actions (`apply_patches`, `rollback_patches`) get `retries=1` —
+change operations are **not** blindly retried; the explicit remediation loop
+owns that decision.
+
+### 2. Error handling — `@guarded_node(name, produces=...)`
+Every agent is wrapped. It catches `NodeFailure`, `BudgetExceeded`,
+`KeyError`, `ValueError` and writes `status="failed"`, `failed_node`, and an
+`errors[]` entry into state instead of raising. The graph then routes to the
+terminal `failure` node. Graceful degradation is used where an audit record
+matters more than the LLM:
+- **Risk Agent** — if the LLM fails, falls back to the deterministic rule
+  (`critical == True` → HIGH) and logs the fallback in `errors[]`.
+- **Compliance Agent** — if the LLM fails, emits a raw (non-prose) audit
+  record so compliance evidence always exists.
+
+### 3. Stopping a node from running multiple times
+This is the **idempotency guard**, and there are four layers:
+
+1. **`produces="<state key>"`** — `@guarded_node("runbook", produces="runbook")`
+   skips the node entirely if that key is already populated. On a resume,
+   replay, or re-invoke of the same `thread_id`, assessment / risk / runbook /
+   approval will **not** call their tools again.
+2. **`node_attempts` counter in state** — every execution increments
+   `state["node_attempts"][node]`; past `MAX_NODE_ATTEMPTS` it raises
+   `BudgetExceeded`. This caps even the nodes that are legitimately in a loop
+   (remediation / validation).
+3. **`idempotency_key`** — the supervisor derives a stable key per run
+   (sha256 of the run identity). It is passed to `apply_patches()` and
+   `rollback_patches()` so a *downstream* system can de-duplicate a repeated
+   change request even if the agent retries.
+4. **Status gate** — once `status` is `failed`/`aborted`, every guarded node
+   returns `{}` immediately, so no further side effects happen.
+
+### 4. Max tool call limit
+`charge_tool_call(state, tool_name)` increments `state["tool_calls"]` before
+*every* MCP invocation and raises `BudgetExceeded` past `MAX_TOOL_CALLS = 20`.
+This is the cost/loop ceiling for the run and applies across all MCP servers.
+
+### 5. Termination conditions
+The run always ends in one of these states:
+
+| Condition | Resulting `status` | Side effect |
+|---|---|---|
+| All nodes complete | `completed` | Patched + validated + report |
+| Human denies approval | (unset) → `END` | No change |
+| HITL timeout (300s) | `aborted` | No change (fail-safe deny) |
+| Any node exhausts retries | `failed` | `failure` node, escalate to on-call |
+| Node re-run cap hit | `failed` (`BudgetExceeded`) | `failure` node |
+| Tool budget exhausted | `failed` (`BudgetExceeded`) | `failure` node |
+| Validation unhealthy after max attempts | `rolled_back` | Rollback executed, report written |
+| Runaway loop | `GraphRecursionError` at `recursion_limit = 30` | Falls back to last checkpoint |
+
+Every ambiguous outcome **fails safe** — nothing is patched.
+
+### 6. Checkpoint fallback
+`graph.invoke` is wrapped in `try/except`; on an unexpected abort the last
+good checkpoint is recovered with `graph.get_state(config).values` so the
+audit trail is never lost.
 
 ---
 
@@ -310,13 +431,33 @@ Where the workflow can branch, stop, or continue:
 
 | Tool / Service | Used By | Purpose | Input | Output |
 |---|---|---|---|---|
-| `get_patch_info()` (MCP) | `patch_assessment_agent` | Return missing/critical patch info | — | `{"missing_patches": 15, "critical": True}` |
-| `retrieve_runbook()` (MCP / RAG) | `runbook_agent` | Return runbook / SOP for patching | — | Runbook text (apply patches, restart, validate) |
-| Console `input()` | `approval_agent` | Capture human approval decision | Prompt string | `"yes"` / `"no"` |
+| `get_patch_info()` (MCP) | `patch_assessment_agent` | Return missing/critical patch info | — | `{"missing_patches": 15, "critical": True, "os": "RHEL8"}` |
+| `retrieve_runbook()` (MCP / RAG) | `runbook_agent` | Return runbook / SOP for patching | `patch_type` | Runbook text |
+| `apply_patches()` (MCP) | `remediation_agent` | Execute the patch install | runbook + `idempotency_key` | Install result |
+| `check_service_health()` (MCP) | `validation_agent` | Post-change health probe | — | `"Services Healthy"` / unhealthy |
+| `rollback_patches()` (MCP) | `rollback_agent` | Undo a failed patch | `idempotency_key` | Rollback result |
+| Console `input()` | `approval_agent` | Capture human approval (300s timeout) | Prompt string | `"yes"` / `"no"` / `"timeout"` |
 | `MemorySaver` (LangGraph) | Graph runtime | Checkpoint workflow state | State snapshot | Persisted checkpoint |
 
-There is no external patch execution API wired up — remediation is represented
-as a status text.
+All tool stubs are wrapped with `@resilient(...)` and counted via
+`charge_tool_call()`.
+
+### MCP servers used in this workflow
+
+| MCP Server | Tools exposed | Backing system (prod) | Used by | Guardrails |
+|---|---|---|---|---|
+| **Patch MCP** | `get_patch_info`, `apply_patches`, `rollback_patches` | SCCM / WSUS / Red Hat Satellite / Ansible Tower | Assessment, Remediation, Rollback | 15s timeout; read tools 3 retries, change tools 1 retry + idempotency key |
+| **Runbook / RAG MCP** | `retrieve_runbook` (vector search over Runbooks / SOP / KB / SharePoint) | Vector store + SharePoint/Confluence | Runbook Agent | 15s timeout, 3 retries, **fail closed** on empty runbook |
+| **Monitoring / Health MCP** | `check_service_health` | Prometheus / Nagios / Datadog | Validation Agent | 15s timeout, 3 retries |
+| **Approval MCP** (prod) | `request_approval` via ServiceNow change / Slack / Teams | ServiceNow CHG + chat ops | Approval Agent | `HITL_TIMEOUT` 300s → auto-deny |
+| **Compliance MCP** (prod) | `submit_audit_report` | Immutable audit store / GRC tool | Compliance Agent | retries + local buffer fallback |
+
+In the POC these are **plain Python stubs** labelled `[MCP]` — no MCP server is
+actually running. In production they would be loaded with
+`langchain-mcp-adapters`; the agent code does not change, only the tool
+implementation moves behind the MCP protocol.
+
+The `MAX_TOOL_CALLS = 20` budget applies across every MCP server in a run.
 
 ---
 
@@ -484,10 +625,42 @@ Stand up two MCP servers exposing tools over stdio/HTTP: (a) a **Patch MCP serve
 Each LLM call is wrapped in `try/except` with a fallback to a deterministic rule, so the graph never wedges on an LLM error.
 
 **Q9. How would you handle a remediation failure — where would retries or a rollback branch go?**
-Add a conditional edge after `validation_agent`:
-- If `validation == "healthy"` → `compliance`.
-- Else → `rollback_agent` (executes the runbook's rollback section) → `notify_agent` (pages on-call) → `compliance` (marks the run as *failed + rolled back*).
-Add a retry counter to state (`retry_count: int`) and route `remediation → validation → remediation` up to N attempts before rollback. LangGraph handles this naturally via conditional edges plus a state field.
+**Implemented.** A conditional edge `validation_router` sits after
+`validation_agent`:
+- `validation == "Services Healthy"` → `compliance`.
+- unhealthy and `remediation_attempts < MAX_REMEDIATION_ATTEMPTS` → back to
+  `remediation` (the remediation node clears `validation` so the loop
+  re-validates).
+- attempts exhausted → `rollback_agent` (calls `rollback_patches()` with the
+  run's `idempotency_key`) → `compliance`, with `status="rolled_back"`.
+The loop is bounded three ways: `remediation_attempts`, `node_attempts`
+(`MAX_NODE_ATTEMPTS`), and LangGraph's `recursion_limit = 30`.
+
+**Q9b. How do you make sure an agent/node does not run multiple times?**
+Four layers: (1) `@guarded_node(name, produces="key")` skips the node if its
+output key is already in state — critical on resume/replay of the same
+`thread_id`; (2) a `node_attempts` counter in state caps each node at
+`MAX_NODE_ATTEMPTS = 2`; (3) an `idempotency_key` is passed to the change
+tools so the downstream system can de-duplicate a repeated patch request;
+(4) once `status` is `failed`/`aborted`, every guarded node returns `{}`
+immediately so no further side effects occur.
+
+**Q9c. What is your retry policy, and why not just retry everything?**
+Read-only tools (`get_patch_info`, `retrieve_runbook`, `check_service_health`)
+and LLM calls get 3 attempts with jittered exponential backoff and a hard
+timeout. Change tools (`apply_patches`, `rollback_patches`) get only 1 retry
+because blindly retrying a change can double-apply it — retry there is an
+explicit graph-level decision (`validation_router`) with an idempotency key,
+not a silent loop. The LLM client is set to `max_retries=0` so SDK retries
+don't multiply the configured count.
+
+**Q9d. What are your termination conditions and tool-call limits?**
+`MAX_TOOL_CALLS = 20` (enforced by `charge_tool_call` → `BudgetExceeded`),
+`MAX_NODE_ATTEMPTS = 2` per node, `MAX_REMEDIATION_ATTEMPTS = 2`,
+`HITL_TIMEOUT = 300s` (auto-deny), per-call `TOOL_TIMEOUT`/`LLM_TIMEOUT`, and
+`recursion_limit = 30` passed in the invoke config. Terminal states are
+`completed`, `aborted`, `failed`, and `rolled_back` — and every ambiguous
+outcome fails safe with no patch applied.
 
 **Q10. What structured outputs are you using?**
 The shared state is a `TypedDict` (`PatchState`) with fixed keys: `patch_data: dict`, `risk_level: str`, `runbook: str`, `approval: str`, `remediation: str`, `validation: str`. Every agent returns a partial dict that LangGraph merges into state — that partial is effectively a structured output. In production I'd tighten `patch_data` and `risk_level` to Pydantic models (`PatchInfo`, `RiskDecision`) and use `llm.with_structured_output(Model)` so the LLM is forced to emit valid JSON matching the schema.
@@ -528,7 +701,31 @@ No. Each agent returns a **partial dict** (e.g., `return {"risk_level": "HIGH"}`
 - Add rate limiting on the MCP tool calls to protect SCCM/WSUS.
 
 **Q17. What are the failure modes of this workflow?**
-(1) MCP tool timeout on `get_patch_info` — handle with retries + fallback to cached patch data. (2) Empty/irrelevant runbook — validate `runbook` is non-empty before approval; fail closed. (3) Human never responds — checkpoint holds; add a 24-hour timer that routes to `escalation_agent`. (4) Remediation partial success — validation catches it and triggers rollback. (5) Compliance store unreachable — buffer the report locally and retry.
+(1) MCP tool timeout on `get_patch_info` — `@resilient` retries 3× with backoff,
+then `@guarded_node` marks the run failed and routes to the `failure` node.
+(2) Empty/irrelevant runbook — `retrieve_runbook` raises on empty text, so the
+workflow **fails closed** and never patches unguided. (3) Human never responds
+— `HITL_TIMEOUT = 300s` auto-denies (`status="aborted"`); in production this
+becomes a longer timer plus an escalation node. (4) Remediation partial success
+— validation catches it, the bounded retry loop re-runs remediation, and
+rollback fires when attempts are exhausted. (5) LLM down — the risk agent falls
+back to a deterministic rule and the compliance agent emits a raw audit record.
+(6) Runaway loop / cost blowup — `MAX_TOOL_CALLS`, `MAX_NODE_ATTEMPTS` and
+`recursion_limit` terminate the run.
+
+**Q17b. Additional questions to be ready for**
+- Why retry inside a decorator instead of LangGraph's node-level `RetryPolicy`
+  (`add_node(..., retry=RetryPolicy(max_attempts=3))`)? — because the decorator
+  also gives per-call timeouts and feeds the tool-call budget.
+- Which errors do you retry vs fail fast on? (transient I/O & timeouts vs
+  schema/validation errors)
+- Why jitter in the backoff? (prevents synchronized retry storms across
+  thousands of hosts)
+- Why is the HITL timeout an auto-**deny** and not an auto-approve?
+- How would you add a circuit breaker for a repeatedly failing MCP server?
+- What is persisted in the checkpoint when a node times out mid-call?
+- How do you alert/page on runs ending in `failed` or `rolled_back`?
+- Can an operator raise the tool budget and resume the same `thread_id`?
 
 **Q18. How do you test this workflow?**
 - **Unit tests** per agent — mock the tool calls and assert the partial state returned.
