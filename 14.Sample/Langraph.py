@@ -365,4 +365,12 @@ if __name__ == "__main__":
     for k, v in final_state.items():
         print(f"{k}: {v}")
 
-
+"""
+Describe an agent system you shipped to production. What broke, and what did you change?
+I worked on a LangGraph-based multi-agent infrastructure incident investigation and remediation 
+workflow. It used multiple agents for triage, diagnostics, RCA, RAG-based runbook retrieval, and 
+controlled remediation with Human-in-the-Loop approval. One issue we encountered was inconsistent
+retrieval of relevant runbook context for some queries, so we improved the retrieval pipeline with
+hybrid search, reranking, and retrieval-quality evaluation to make the agent responses more
+reliable.
+"""

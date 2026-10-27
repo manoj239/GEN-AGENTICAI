@@ -10,6 +10,24 @@ CATEGORIES_PATH = os.path.join(BASE_DIR, "categories.json")
 
 # MCP Server
 mcp = FastMCP("ExpenseTracker")
+"""
+SERVERS = {
+    "expense_local_server": {
+        "transport": "stdio",
+        "transport": "streamable_http",
+        "url": "https://prudvi-remote-mcp-server.fastmcp.app/mcp",
+        "command": "H:\\01_Training\\ContentSlides_AgenticAI\\Code\\MCP\\Custom_local_mcp-server\\.venv\\Scripts\\python.exe",
+        "args": [
+            "H:\\01_Training\\ContentSlides_AgenticAI\\Code\\MCP\\Custom_local_mcp-server\\main.py"
+        ],
+        "env": {
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1"
+        }
+    }
+}
+"""
+
 
 
 def init_db() -> None:
@@ -161,7 +179,9 @@ if __name__ == "__main__":
 """
 I developed a custom MCP Server using the FastMCP framework for an Expense Management use case. The
 objective was to allow AI agents to manage and analyze employee expenses such as travel, food, 
-accommodation, and other business-related expenses.For persistence, I used a SQLite database to store  expense details such as date, amount, category, subcategory, and notes. I exposed three MCP Tools using the @mcp.tool() decorator:
+accommodation, and other business-related expenses.For persistence, I used a SQLite database to 
+store  expense details such as date, amount, category, subcategory, and notes. I exposed three 
+MCP Tools using the @mcp.tool() decorator:
 
 add_expense(): Used to add a new expense record into the database.
 list_expenses(): Used to retrieve expenses within a specific date range.

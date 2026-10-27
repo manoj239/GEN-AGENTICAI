@@ -20,9 +20,6 @@ relevant, consistent, and context-aware responses. For any specific production d
 the final hosting platform, load balancer, number of end users, and autoscaling configuration, I 
 would describe the actual client implementation rather than assume those components were deployed.
 
-from transformers import pipeline
-
-
 Application container      -> FastAPI, LangChain, RAG workflow
 Application Load Balancer  -> Distributes incoming requests across healthy application instances
 ECS/ EKS deployment        -> Maintains the desired number of running application instances
@@ -349,7 +346,8 @@ response = llm.invoke(
 )
 print("\n====== ANSWER ======\n")
 print(response.content)
-
+Agentic RAG introduces decision-making and can dynamically choose the most suitable knowledge
+source.
 
 #4. Corrective RAG (CRAG)
 from langchain_community.utilities import GoogleSerperAPIWrapper
@@ -399,6 +397,16 @@ Bad?  → Use Web Search
     Uses Web Search.
 5.Otherwise:
     Uses retrieved documents as context.
+
+In one of my RAG application prototypes, the system sometimes returned irrelevant answers because 
+the retrieved document chunks did not contain the most relevant information. I debugged the issue 
+by examining the retrieved chunks and checking the retrieval results for different queries. I 
+identified that chunking and retrieval quality were the main areas to improve. I refined the 
+chunking strategy, introduced metadata filtering and keyword-based retrieval alongside semantic 
+search, and used CrossEncoder reranking to improve the relevance of the retrieved context. I 
+then evaluated the responses using RAGAS to check faithfulness and answer relevance. This improved 
+the quality of the responses and reduced irrelevant answers. The key lesson was that an LLM's
+output depends heavily on the quality of the retrieved context.
 
 #5. Self-RAG: LLM evaluates the retrieved context itself.
 from langchain_community.utilities import GoogleSerperAPIWrapper
