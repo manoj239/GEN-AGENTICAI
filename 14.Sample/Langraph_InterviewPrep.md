@@ -14,6 +14,7 @@ pulling the ticket, running diagnostics, correlating logs, looking at
 historical health, searching runbooks/SOPs/KB/SharePoint, chasing approval,
 and finally executing the fix.
 
+
 **Why the project was needed**
 
 - To reduce Mean Time To Resolve (MTTR).
@@ -253,7 +254,7 @@ resolves to *do not execute the change*.
 | Agent | Responsibility | Input | Output | Tools Used |
 | :--- | :--- | :--- | :--- | :--- |
 | **Triage Agent** | Retrieves the incident and normalizes its details into shared state. Reads from Excel in the POC and from ServiceNow in production. | `incident_id` | `incident_data` (short description, severity, incident type, affected asset) | **Excel reader** (POC) / **ServiceNow MCP** (prod) |
-| **Command Executor & Log Extractor** | Runs initial diagnostic checks selected by incident type (ping, SSH check, switch/router status check for network incidents) and collects relevant logs and command output. | `incident_data` | `diagnostic_output`, `logs` | **ping**, **SSH check**, **switch/router status check**, **log extractor** |
+| **Command Executor & Log Extractor** | Runs initial diagnostic checks selected by incident type (ping, SSH check, switch/router status check for network incidents) and collects relevant logs and command output. | `incident_data` | `diagnostic_output`, `logs` | **ping**, **SSH check**, **switch/router status check**, **log extractor** | 
 | **Diagnostic Agent** | Analyzes historical and current health of the affected VM / server / network device to establish baseline behavior and detect deviations before the incident. | `incident_data`, `diagnostic_output`, `logs` | `health_analysis` | **Monitoring / historical health data lookup** |
 | **RCA / Analysis Agent** | Retrieves troubleshooting and resolution steps from approved sources via RAG and produces a grounded RCA plus recommended remediation steps. | Full accumulated state | `rca`, `recommended_steps` | **RAG** over Runbooks / SOPs / Knowledge Base / SharePoint |
 | **Remediation Agent** | Holds the Human-in-the-Loop approval gate and executes the recommended remediation only when the human approves. Otherwise the workflow stops without any change. | `rca`, `recommended_steps` | `approval`, `remediation` | **HITL prompt** + **change / execution tool** |
@@ -264,7 +265,7 @@ Remediation Agent's HITL + execute steps. Cmd/Log and Diagnostic agents are
 part of the design but not present in the POC file.)*
 
 ---
-
+uptime, free -h, df -h,systemctl status apache2, journalctl -u apache2 --since "2 hours ago",journalctl -p err --since "2 hours ago"
 ## 7. RAG Implementation
 
 

@@ -374,3 +374,26 @@ retrieval of relevant runbook context for some queries, so we improved the retri
 hybrid search, reranking, and retrieval-quality evaluation to make the agent responses more
 reliable.
 """
+
+builder = StateGraph(IncidentState)
+builder.add_node("triage", triage_agent)
+builder.add_node("cmd_log",command_executor_agent)
+builder.add_node("diagnostic",diagnostic_agent)
+builder.add_node("rca",rca_agent)
+builder.add_node("remediation",remediation_agent)
+builder.add_node("execute", execute_remediation)
+builder.set_entry_point("triage")
+builder.add_edge("triage","cmd_log")
+builder.add_edge("cmd_log","diagnostic")
+builder.add_edge("diagnostic","rca")
+builder.add_conditional_edges("rca",need_remediation,{"remediation": "remediation","end": END})
+builder.add_conditional_edges("remediation",approval_router,
+    {
+        "execute": "execute",
+        "end": END
+    }
+)
+
+builder.add_edge("execute",END)
+memory = MemorySaver()
+graph = builder.compile(checkpointer=memory)
