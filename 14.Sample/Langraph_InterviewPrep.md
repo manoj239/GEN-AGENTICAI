@@ -1332,6 +1332,65 @@ Typical techniques:
     Reuse stable retrieval context
     Don't claim a specific dollar value unless you measured it against the actual model used.
 
+24. How do you avoid the LangGraph workflow running multiple times? What the interviewer was testing: Whether you understand duplicate execution, state persistence, retries, and idempotency in LangGraph.
+Interview-ready answer: "In my VM incident management use case, I would use a combination of checkpointing, incident-level tracking, conditional routing, and idempotency to avoid duplicate workflow execution.
+1. Unique incident ID: Every incident has a unique ID, such as INC0887758. I use this to identify and track the workflow associated with that incident.
+2. LangGraph checkpointer: I use a persistent checkpointing mechanism with a unique thread_id. This allows LangGraph to save the workflow state and resume execution instead of starting from the beginning.
+3. State validation: Before executing a node, I check whether the required investigation or remediation step has already been completed. Based on the state, conditional edges decide the next step.
+4. Idempotency: For operations such as restarting a service, I ensure that the same action is not executed repeatedly for the same incident. This can be enforced using an execution record or idempotency key.
+5. Retry handling: I retry only transient failures, with a limited retry count and appropriate backoff."
+
+![alt text](image.png)
+
+Important distinction: A thread_id and checkpointer allow state persistence and resumption, but they do not independently prevent two separate requests from starting the same workflow. For that, you need duplicate-event detection, execution locking or a unique database constraint, and idempotent operations.
+A small LangGraph example:
+from langgraph.checkpoint.memory import MemorySaver
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
+config = {
+    "configurable": {
+        "thread_id": "INC0887758"
+    }
+}
+result = app.invoke(initial_state, config=config)
+For production, use a persistent checkpointer rather than MemorySaver, which is intended for development and loses state when the process restarts.
+
+25. Where did you use metadata in your RAG pipeline?
+What the interviewer was testing: Whether you understand how metadata improves retrieval accuracy, filtering, and traceability. First, understand metadata simply. Metadata is additional information attached to a document or document chunk.
+
+For example: 
+Imagine you have 1,000 infrastructure runbooks. You don't want to retrieve just any document when investigating a VM incident. You want documents relevant to that particular VM, operating system, service, and issue.
+
+![alt text](image-1.png)
+
+Where exactly does metadata come into the RAG pipeline?
+1. Document ingestion: Load PDFs, SOPs, runbooks and knowledge-base documents.
+2. Chunking: Split documents into smaller chunks and retain their source information.
+3. Metadata assignment: Attach fields such as source, page number, service, OS and environment.
+4. Embeddings and vector database: Generate embeddings for chunk content and store them along with metadata.
+5. Retrieval with metadata filtering: Filter relevant documents first, then perform similarity or hybrid search.
+6.LLM generation: Pass the retrieved chunks to the LLM to generate a grounded answer.
+Interview-ready answer
+"In my RAG pipeline, I use metadata during document ingestion and chunk creation.
+
+For example, when ingesting infrastructure runbooks and SOPs, I can attach metadata such as document name, page number, service name, operating system, environment, and incident category to each chunk.
+
+I store this metadata along with the embeddings in the vector database.
+
+During retrieval, I can apply metadata filters to narrow down the search. For example, if an incident involves Apache2 on an Ubuntu 22.04 production VM, I can filter for relevant service, OS and environment before performing semantic similarity search.
+
+This helps reduce irrelevant results, improves retrieval relevance, and also allows me to trace the retrieved information back to its original document and page."
+
+Question	                              Key concept to remember
+Avoid repeated workflow execution	      Checkpointing + unique incident tracking + idempotency
+Metadata in RAG	                        Attach metadata to chunks + store with embeddings + filter during retrieval
+
+One more distinction that interviewers may ask:
+- Embeddings represent the semantic meaning of text.
+- Metadata describes the text, such as its source, service, OS or environment.
+- Similarity search finds semantically relevant chunks.
+- Metadata filtering narrows the search to matching attributes.
+
 The VM incident workflow is implemented as a stateful LangGraph pipeline. An incident first goes through triage, then deterministic tools collect CPU, memory, disk, network, service and log evidence. The Diagnostic and RCA agents reason over that evidence, with RAG retrieving only approved, versioned runbook content. A remediation plan is then generated, but execution is blocked behind human approval. Once approved, an allowlisted change tool executes the action, followed by post-remediation verification.
 
 Each incident has an isolated thread and durable state, and production would use PostgreSQL checkpointing. We use retries only for transient errors, with exponential backoff and jitter, circuit breakers around unhealthy external services, and idempotency around mutating operations. LangSmith provides AI-level tracing while OpenTelemetry covers the end-to-end system. Cost is controlled by filtering raw telemetry before LLM calls, retrieving only relevant RAG chunks, caching embeddings, and sending each agent only the state it needs.”
